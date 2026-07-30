@@ -208,13 +208,11 @@ add_action('rest_api_init', function () {
             foreach ($fields_map as $key => $wp_field) {
                 if (isset($data[$key])) {
                     if ($key === 'title') $data[$key] = wp_strip_all_tags($data[$key]);
-                    if ($key === 'author' && is_numeric($data[$key])) {
-                        $data[$key] = (int)$data[$key];
-                        $post_data['post_author'] = $data[$key];
-                    } else {
-                        $post_data[$wp_field] = $data[$key];
+                    if ($key === 'author') {
+                        if (is_numeric($data[$key])) $post_data['post_author'] = (int)$data[$key];
+                        continue;
                     }
-                    if ($key !== 'author') $post_data[$wp_field] = $data[$key];
+                    if (isset($data[$key])) $post_data[$wp_field] = $data[$key];
                 }
             }
 
@@ -845,7 +843,6 @@ add_action('rest_api_init', function () {
             hermes_log("Plugin instalado de: $zip_url");
             return hermes_json(['success' => true, 'message' => 'Plugin instalado com sucesso']);
         },
-        'permission_callback' => function ($request) === true; // <-- syntax fix below
         'permission_callback' => function ($request) {
             return hermes_auth($request) === true;
         },
@@ -1003,7 +1000,7 @@ add_action('rest_api_init', function () {
 
             if (empty($q)) return hermes_error('q (query) é obrigatória', 'missing', 400);
 
-            $results = search_by_title($q);
+            $results = hermes_search($q);
 
             return hermes_json([
                 'query' => $q,
@@ -1196,6 +1193,14 @@ function hermes_get_ext_from_mime($type) {
         'video/mp4' => 'mp4', 'video/webm' => 'webm', 'application/pdf' => 'pdf',
     ];
     return $map[$type] ?? 'bin';
+}
+
+function hermes_search($q) {
+    return get_posts([
+        's' => $q,
+        'posts_per_page' => 20,
+        'post_status' => 'publish',
+    ]);
 }
 
 function hermes_set_featured_image($post_id, $image_url) {
