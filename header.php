@@ -33,20 +33,31 @@
 
                 <nav class="main-nav" role="navigation" aria-label="<?php esc_attr_e('Menu principal', 'fut-arena'); ?>">
                     <?php
-                    wp_nav_menu([
-                        'theme_location' => 'primary',
-                        'container' => false,
-                        'menu_class' => '',
-                        'fallback_cb' => function() {
-                            echo '<ul>';
-                            echo '<li><a href="/">Home</a></li>';
-                            echo '<li><a href="/category/futebol/">Futebol</a></li>';
-                            echo '<li><a href="/category/volei/">Vôlei</a></li>';
-                            echo '<li><a href="/category/basquete/">Basquete</a></li>';
-                            echo '<li><a href="/category/tenis/">Tênis</a></li>';
-                            echo '</ul>';
-                        },
-                    ]);
+                    // Try registered menu first, fallback to custom pages menu
+                    $has_menu = has_nav_menu('primary');
+                    if ($has_menu) {
+                        wp_nav_menu([
+                            'theme_location' => 'primary',
+                            'container' => false,
+                            'menu_class' => '',
+                        ]);
+                    } else {
+                        // Fallback: show pages as menu items
+                        $pages = [
+                            ['title' => 'HOME', 'url' => home_url('/')],
+                            ['title' => 'SOBRE', 'url' => get_permalink(get_page_by_path('sobre'))],
+                            ['title' => 'CONTATO', 'url' => get_permalink(get_page_by_path('contato'))],
+                            ['title' => 'POLÍTICA', 'url' => get_permalink(get_page_by_path('politica-de-privacidade-2'))],
+                            ['title' => 'TERMOS', 'url' => get_permalink(get_page_by_path('termos-de-uso'))],
+                        ];
+                        echo '<ul class="fallback-pages-menu">';
+                        foreach ($pages as $page) {
+                            if ($page['url']) {
+                                echo '<li><a href="' . esc_url($page['url']) . '">' . esc_html($page['title']) . '</a></li>';
+                            }
+                        }
+                        echo '</ul>';
+                    }
                     ?>
                 </nav>
 

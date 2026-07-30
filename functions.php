@@ -551,3 +551,58 @@ add_filter('heartbeat_settings', 'futarena_heartbeat_settings');
 add_filter('show_admin_bar', function($show) {
     return current_user_can('administrator') ? $show : false;
 });
+
+// ============================================
+// AUTO-CONFIGURE MENU ON THEME ACTIVATION
+// ============================================
+function futarena_setup_menu_on_activation() {
+    // Pages to add to menu
+    $pages_config = [
+        'sobre' => 'Sobre',
+        'contato' => 'Contato',
+        'politica-de-privacidade-2' => 'Política de Privacidade',
+        'termos-de-uso' => 'Termos de Uso',
+    ];
+
+    $menu_name = 'Menu Principal';
+    $menu_id = 0;
+
+    // Find or create the menu
+    $menus = wp_get_nav_menus();
+    foreach ($menus as $menu) {
+        if ($menu->name === $menu_name) {
+            $menu_id = $menu->term_id;
+            break;
+        }
+    }
+
+    if (!$menu_id) {
+        $menu_id = wp_create_nav_menu($menu_name);
+    }
+
+    if (!$menu_id || is_wp_error($menu_id)) return;
+
+    // Get existing menu items to avoid duplicates
+    $existing = wp_get_nav_menu_items($menu_id);
+    $existing_ids = [];
+    foreach ($existing as $item) {
+        $existing_ids[$item->object_id] = true;
+    }
+
+    // Add pages to menu
+    foreach ($pages_config as $slug => $title) {
+        $page = get_page_by_path($slug, OBJECT, 'page');
+        if ($page && !isset($existing_ids[$page->ID])) {
+            wp_add_nav_menu_item($menu_id, $page->ID, false);
+        }
+    }
+
+    // Assign menu to all locations
+    $locations = get_theme_mod('nav_menu_locations', []);
+    $locations['primary'] = $menu_id;
+    $locations['footer'] = $menu_id;
+    $locations['mobile'] = $menu_id;
+    set_theme_mod('nav_menu_locations', $locations);
+}
+add_action('after_switch_theme', 'futarena_setup_menu_on_activation');
+
