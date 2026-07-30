@@ -703,29 +703,41 @@ add_action('rest_api_init', function () {
 
             if (empty($zip_url)) return hermes_error('zip_url obrigatório', 'missing', 400);
 
-            // Download theme via HTTP
-            $response = wp_remote_get($zip_url, ['timeout' => 120, 'stream' => true, 'filename' => '/tmp/hermes-theme.zip']);
-            if (is_wp_error($response)) {
-                return hermes_error('Download falhou: ' . $response->get_error_message(), 'download_failed', 500);
+            // Download via file_get_contents (universally available)
+            $zip_content = @file_get_contents($zip_url, false, null, 0, 50 * 1024 * 1024);
+            if ($zip_content === false) {
+                return hermes_error('Download falhou: não foi possível baixar de ' . $zip_url, 'download_failed', 500);
             }
-            $zip_path = '/tmp/hermes-theme.zip';
-            if (!file_exists($zip_path)) {
-                return hermes_error('Download não gerou arquivo', 'download_failed', 500);
-            }
-
-            require_once ABSPATH . 'wp-admin/includes/file.php';
-            require_once ABSPATH . 'wp-admin/includes/theme.php';
-
-            // Use unzip_file directly
-            $result = unzip_file($zip_path, get_theme_root());
-            @unlink($zip_path);
-
-            if (is_wp_error($result)) {
-                return hermes_error('Unzip falhou: ' . $result->get_error_message(), 'unzip_failed', 500);
+            if (strlen($zip_content) < 100) {
+                return hermes_error('Download retornou arquivo vazio ou muito pequeno', 'download_failed', 500);
             }
 
-            hermes_log("Tema instalado de: $zip_url");
-            return hermes_json(['success' => true, 'message' => 'Tema instalado com sucesso']);
+            // Save to theme directory
+            $theme_root = get_theme_root();
+            $temp_zip = $theme_root . '/hermes-temp-theme.zip';
+            $saved = @file_put_contents($temp_zip, $zip_content);
+            if ($saved === false) {
+                return hermes_error('Não foi possível salvar o arquivo em ' . $temp_zip, 'write_failed', 500);
+            }
+
+            // Unzip via native PHP ZipArchive
+            $zip = new ZipArchive();
+            $res = $zip->open($temp_zip);
+            if ($res !== true) {
+                @unlink($temp_zip);
+                return hermes_error('Não foi possível abrir o ZIP (código: ' . $res . ')', 'unzip_failed', 500);
+            }
+
+            $extracted = $zip->extractTo($theme_root);
+            $zip->close();
+            @unlink($temp_zip);
+
+            if (!$extracted) {
+                return hermes_error('Falha ao extrair o ZIP', 'unzip_failed', 500);
+            }
+
+            hermes_log("Tema instalado de: $zip_url (" . strlen($zip_content) . " bytes)");
+            return hermes_json(['success' => true, 'message' => 'Tema instalado com sucesso', 'size' => strlen($zip_content)]);
         },
         'permission_callback' => function ($request) {
             return hermes_auth($request) === true;
@@ -830,28 +842,39 @@ add_action('rest_api_init', function () {
 
             if (empty($zip_url)) return hermes_error('zip_url obrigatório', 'missing', 400);
 
-            require_once ABSPATH . 'wp-admin/includes/file.php';
-            require_once ABSPATH . 'wp-admin/includes/plugin.php';
-
-            // Download via wp_remote_get
-            $response = wp_remote_get($zip_url, ['timeout' => 120, 'stream' => true, 'filename' => '/tmp/hermes-plugin.zip']);
-            if (is_wp_error($response)) {
-                return hermes_error('Download falhou: ' . $response->get_error_message(), 'download_failed', 500);
+            // Download via file_get_contents
+            $zip_content = @file_get_contents($zip_url, false, null, 0, 50 * 1024 * 1024);
+            if ($zip_content === false) {
+                return hermes_error('Download falhou: não foi possível baixar', 'download_failed', 500);
             }
-            $zip_path = '/tmp/hermes-plugin.zip';
-            if (!file_exists($zip_path)) {
-                return hermes_error('Download não gerou arquivo', 'download_failed', 500);
+            if (strlen($zip_content) < 100) {
+                return hermes_error('Download retornou arquivo vazio', 'download_failed', 500);
             }
 
-            $result = unzip_file($zip_path, WP_PLUGIN_DIR);
-            @unlink($zip_path);
+            $temp_zip = sys_get_temp_dir() . '/hermes-temp-plugin.zip';
+            $saved = @file_put_contents($temp_zip, $zip_content);
+            if ($saved === false) {
+                return hermes_error('Não foi possível salvar arquivo temporário', 'write_failed', 500);
+            }
 
-            if (is_wp_error($result)) {
-                return hermes_error('Unzip falhou: ' . $result->get_error_message(), 'unzip_failed', 500);
+            // Unzip via native PHP ZipArchive
+            $zip = new ZipArchive();
+            $res = $zip->open($temp_zip);
+            if ($res !== true) {
+                @unlink($temp_zip);
+                return hermes_error('Não foi possível abrir o ZIP (código: ' . $res . ')', 'unzip_failed', 500);
+            }
+
+            $extracted = $zip->extractTo(WP_PLUGIN_DIR);
+            $zip->close();
+            @unlink($temp_zip);
+
+            if (!$extracted) {
+                return hermes_error('Falha ao extrair o ZIP', 'unzip_failed', 500);
             }
 
             hermes_log("Plugin instalado de: $zip_url");
-            return hermes_json(['success' => true, 'message' => 'Plugin instalado com sucesso']);
+            return hermes_json(['success' => true, 'message' => 'Plugin instalado com sucesso', 'size' => strlen($zip_content)]);
         },
         'permission_callback' => function ($request) {
             return hermes_auth($request) === true;
