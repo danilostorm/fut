@@ -703,15 +703,20 @@ add_action('rest_api_init', function () {
 
             if (empty($zip_url)) return hermes_error('zip_url obrigatório', 'missing', 400);
 
-            // Download theme
-            $zip_path = download_url($zip_url, 120);
-            if (is_wp_error($zip_path)) {
-                return hermes_error('Download falhou: ' . $zip_path->get_error_message(), 'download_failed', 500);
+            // Download theme via HTTP
+            $response = wp_remote_get($zip_url, ['timeout' => 120, 'stream' => true, 'filename' => '/tmp/hermes-theme.zip']);
+            if (is_wp_error($response)) {
+                return hermes_error('Download falhou: ' . $response->get_error_message(), 'download_failed', 500);
+            }
+            $zip_path = '/tmp/hermes-theme.zip';
+            if (!file_exists($zip_path)) {
+                return hermes_error('Download não gerou arquivo', 'download_failed', 500);
             }
 
             require_once ABSPATH . 'wp-admin/includes/file.php';
             require_once ABSPATH . 'wp-admin/includes/theme.php';
 
+            // Use unzip_file directly
             $result = unzip_file($zip_path, get_theme_root());
             @unlink($zip_path);
 
@@ -828,9 +833,14 @@ add_action('rest_api_init', function () {
             require_once ABSPATH . 'wp-admin/includes/file.php';
             require_once ABSPATH . 'wp-admin/includes/plugin.php';
 
-            $zip_path = download_url($zip_url, 120);
-            if (is_wp_error($zip_path)) {
-                return hermes_error('Download falhou: ' . $zip_path->get_error_message(), 'download_failed', 500);
+            // Download via wp_remote_get
+            $response = wp_remote_get($zip_url, ['timeout' => 120, 'stream' => true, 'filename' => '/tmp/hermes-plugin.zip']);
+            if (is_wp_error($response)) {
+                return hermes_error('Download falhou: ' . $response->get_error_message(), 'download_failed', 500);
+            }
+            $zip_path = '/tmp/hermes-plugin.zip';
+            if (!file_exists($zip_path)) {
+                return hermes_error('Download não gerou arquivo', 'download_failed', 500);
             }
 
             $result = unzip_file($zip_path, WP_PLUGIN_DIR);
